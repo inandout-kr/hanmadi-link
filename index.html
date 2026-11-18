@@ -4,20 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>약속</title>
-<meta name="description" content="날짜와 장소를 확인하고 내 캘린더에 추가하세요.">
+<meta name="description" content="약속을 확인하고 수락하거나 바꾸자고 답하세요.">
 <meta property="og:title" content="약속이 도착했어요">
-<meta property="og:description" content="날짜와 장소를 확인하고 내 캘린더에 추가하세요.">
+<meta property="og:description" content="확인하고 수락하거나 바꾸자고 답하세요. 앱 설치는 필요 없습니다.">
 <meta property="og:type" content="website">
 <meta name="robots" content="noindex">
 <style>
   :root {
     --bg: #f4f5f8; --card: #ffffff; --ink: #14161a; --sub: #5d6470; --line: #e4e6eb;
-    --brand: #2f5bea; --on-brand: #ffffff; --soft: #eef2ff; --on-soft: #1d3fb5;
+    --brand: #2f5bea; --on-brand: #ffffff; --soft: #eef2ff; --on-soft: #1d3fb5; --good: #1f8a4c;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0f1012; --card: #1a1c20; --ink: #f1f2f4; --sub: #a2a8b3; --line: #2b2e34;
-      --brand: #8ea8ff; --on-brand: #0d1a45; --soft: #222a45; --on-soft: #c5d2ff;
+      --brand: #8ea8ff; --on-brand: #0d1a45; --soft: #222a45; --on-soft: #c5d2ff; --good: #6fd39a;
     }
   }
   * { box-sizing: border-box; }
@@ -31,6 +31,7 @@
   main { width: 100%; max-width: 420px; }
   .eyebrow { color: var(--sub); font-size: 14px; margin: 8px 4px 12px; }
   .card { background: var(--card); border-radius: 24px; padding: 26px 24px; border: 1px solid var(--line); }
+  .badge { display: inline-block; font-size: 13px; font-weight: 700; color: var(--on-soft); background: var(--soft); border-radius: 999px; padding: 4px 12px; margin-bottom: 12px; }
   .when { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .when .time { color: var(--brand); }
   .title { font-size: 20px; font-weight: 700; margin-top: 10px; overflow-wrap: anywhere; }
@@ -39,7 +40,7 @@
   dt { color: var(--sub); flex: 0 0 44px; }
   dd { margin: 0; flex: 1; overflow-wrap: anywhere; }
   .empty { color: var(--sub); }
-  .actions { display: grid; gap: 10px; margin-top: 16px; }
+  .stack { display: grid; gap: 10px; margin-top: 16px; }
   .btn {
     display: block; width: 100%; text-align: center; text-decoration: none; cursor: pointer;
     font: inherit; font-size: 16px; font-weight: 700; padding: 15px 16px; border-radius: 16px; border: 0;
@@ -47,8 +48,18 @@
   .btn.primary { background: var(--brand); color: var(--on-brand); }
   .btn.soft { background: var(--soft); color: var(--on-soft); }
   .btn.plain { background: transparent; color: var(--sub); border: 1px solid var(--line); }
-  .btn:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+  .btn.text { background: transparent; color: var(--sub); font-weight: 500; font-size: 15px; padding: 10px; text-decoration: underline; text-underline-offset: 3px; }
+  .btn:focus-visible, input:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+  .done { color: var(--good); font-weight: 800; font-size: 18px; margin: 20px 4px 0; }
+  .label { color: var(--sub); font-size: 14px; margin: 18px 4px 0; }
+  form .field { display: block; margin-top: 12px; }
+  form .field span { display: block; color: var(--sub); font-size: 14px; margin: 0 4px 4px; }
+  input {
+    width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; min-height: 50px;
+  }
   .note { color: var(--sub); font-size: 13px; margin: 14px 4px 0; min-height: 20px; }
+  .copybox { margin-top: 10px; width: 100%; min-height: 96px; font: inherit; font-size: 14px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
   footer { color: var(--sub); font-size: 13px; text-align: center; margin-top: 28px; }
   [hidden] { display: none !important; }
 </style>
@@ -58,11 +69,13 @@
   <p class="eyebrow" id="eyebrow">약속이 도착했어요</p>
 
   <section class="card" id="card" hidden>
+    <div class="badge" id="badge" hidden></div>
     <div class="when" id="when"></div>
     <div class="title" id="title"></div>
     <dl>
       <div class="row"><dt>장소</dt><dd id="place"></dd></div>
       <div class="row" id="peopleRow"><dt>함께</dt><dd id="people"></dd></div>
+      <div class="row" id="memoRow" hidden><dt>한마디</dt><dd id="memo"></dd></div>
     </dl>
   </section>
 
@@ -71,12 +84,48 @@
     <p class="empty">링크가 잘렸을 수 있습니다. 보낸 분께 다시 보내 달라고 해 주세요.</p>
   </section>
 
-  <div class="actions" id="actions" hidden>
-    <a class="btn primary" id="google" target="_blank" rel="noopener">구글 캘린더에 추가</a>
-    <button class="btn soft" id="ics" type="button">캘린더 파일 받기 (아이폰, 삼성, 네이버 등)</button>
-    <button class="btn plain" id="accept" type="button">좋다고 답하기</button>
+  <!-- 1. 받은 사람: 먼저 답한다 -->
+  <div class="stack" id="decide" hidden>
+    <button class="btn primary" id="accept" type="button">수락</button>
+    <button class="btn soft" id="openChange" type="button">시간·장소 바꾸자고 하기</button>
+    <button class="btn text" id="decline" type="button">이번엔 어려워요</button>
   </div>
+
+  <!-- 2. 수락한 뒤: 알리고, 내 캘린더에 넣는다 -->
+  <div id="accepted" hidden>
+    <p class="done">✓ 수락했어요</p>
+    <div class="stack">
+      <button class="btn primary" id="tellOk" type="button">보낸 사람에게 알리기</button>
+    </div>
+    <p class="label" id="calLabel">내 캘린더에 추가</p>
+    <div class="stack" id="calButtons">
+      <a class="btn soft" id="google" target="_blank" rel="noopener">구글 캘린더</a>
+      <button class="btn soft" id="ics" type="button">캘린더 파일 받기 (아이폰·삼성·네이버)</button>
+    </div>
+    <div class="stack">
+      <a class="btn plain" id="openApp" hidden>한마디 앱에 넣기</a>
+    </div>
+  </div>
+
+  <!-- 3. 바꾸자고 하기 -->
+  <form id="change" hidden>
+    <label class="field"><span>날짜</span><input type="date" id="fDate"></label>
+    <label class="field"><span>시각</span><input type="time" id="fTime"></label>
+    <label class="field"><span>장소</span><input type="text" id="fPlace" maxlength="40" autocomplete="off" placeholder="아직 안 정했어요"></label>
+    <label class="field"><span>한마디 (선택)</span><input type="text" id="fNote" maxlength="60" autocomplete="off" placeholder="예: 목요일은 야근이라서"></label>
+    <div class="stack">
+      <button class="btn primary" type="submit">이렇게 바꾸자고 보내기</button>
+      <button class="btn text" id="cancelChange" type="button">돌아가기</button>
+    </div>
+  </form>
+
+  <!-- 4. 보낸 사람이 답장 링크를 열었을 때 -->
+  <div class="stack" id="reply" hidden>
+    <a class="btn primary" id="applyInApp" hidden>한마디 앱에 반영하기</a>
+  </div>
+
   <p class="note" id="note" role="status"></p>
+  <textarea class="copybox" id="copybox" readonly hidden></textarea>
 
   <footer>한마디로 만든 약속 · 이 페이지는 약속 내용을 어디에도 저장하지 않습니다</footer>
 </main>
@@ -87,39 +136,45 @@
   var DOW = "일월화수목금토";
   var $ = function (id) { return document.getElementById(id); };
   var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  var show = function (id, on) { $(id).hidden = !on; };
+  var isAndroid = /Android/i.test(navigator.userAgent);
+  var base = location.origin + location.pathname;
 
-  // 약속 내용은 주소의 # 뒤에만 있다. 브라우저는 # 뒤를 서버로 보내지 않는다.
+  // ---------- 링크 읽고 쓰기: 내용은 주소의 # 뒤에만 있다. 브라우저는 # 뒤를 서버로 보내지 않는다. ----------
+  function decode(raw) {
+    var b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return JSON.parse(new TextDecoder("utf-8").decode(bytes));
+  }
+  function encode(obj) {
+    var bytes = new TextEncoder().encode(JSON.stringify(obj)), bin = "";
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
   function read() {
     var raw = location.hash.replace(/^#/, "");
     if (!raw) return null;
     try {
-      var b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
-      while (b64.length % 4) b64 += "=";
-      var bin = atob(b64);
-      var bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      var data = JSON.parse(new TextDecoder("utf-8").decode(bytes));
-      if (!data || typeof data.t !== "string" || !data.t.trim()) return null;
-      if (data.d && !/^\d{4}-\d{2}-\d{2}$/.test(data.d)) return null;
-      if (data.s && !/^\d{2}:\d{2}$/.test(data.s)) return null;
-      if (data.e && !/^\d{2}:\d{2}$/.test(data.e)) return null;
-      return data;
-    } catch (err) {
-      return null;
-    }
+      var d = decode(raw);
+      if (!d || typeof d.t !== "string" || !d.t.trim()) return null;
+      if (d.d && !/^\d{4}-\d{2}-\d{2}$/.test(d.d)) return null;
+      if (d.s && !/^\d{2}:\d{2}$/.test(d.s)) return null;
+      if (d.e && !/^\d{2}:\d{2}$/.test(d.e)) return null;
+      return d;
+    } catch (err) { return null; }
   }
 
+  // ---------- 날짜와 문장 ----------
   function parts(d) { var p = d.split("-"); return { y: +p[0], m: +p[1], d: +p[2] }; }
   function compact(d) { return d.replace(/-/g, ""); }
   function hm(t) { return t.replace(":", "") + "00"; }
-
-  // 끝 시각이 없으면 한 시간으로 잡는다. 자정을 넘기면 날짜도 넘긴다.
-  function endOf(data) {
-    var p = parts(data.d), s = data.s.split(":");
-    var start = new Date(p.y, p.m - 1, p.d, +s[0], +s[1]);
-    var end;
-    if (data.e) {
-      var e = data.e.split(":");
+  function endOf(x) {
+    var p = parts(x.d), s = x.s.split(":");
+    var start = new Date(p.y, p.m - 1, p.d, +s[0], +s[1]), end;
+    if (x.e) {
+      var e = x.e.split(":");
       end = new Date(p.y, p.m - 1, p.d, +e[0], +e[1]);
       if (end <= start) end.setDate(end.getDate() + 1);
     } else {
@@ -127,119 +182,200 @@
     }
     return end.getFullYear() + pad(end.getMonth() + 1) + pad(end.getDate()) + "T" + pad(end.getHours()) + pad(end.getMinutes()) + "00";
   }
-
-  function nextDay(d) {
-    var p = parts(d), n = new Date(p.y, p.m - 1, p.d + 1);
-    return n.getFullYear() + pad(n.getMonth() + 1) + pad(n.getDate());
+  function nextDay(d) { var p = parts(d), n = new Date(p.y, p.m - 1, p.d + 1); return n.getFullYear() + pad(n.getMonth() + 1) + pad(n.getDate()); }
+  function whenText(x) {
+    if (!x.d) return x.h || "날짜 미정";
+    var p = parts(x.d);
+    return p.m + "/" + p.d + "(" + DOW[new Date(p.y, p.m - 1, p.d).getDay()] + ")";
   }
-
-  function whenText(data) {
-    if (!data.d) return data.h || "날짜 미정";
-    var p = parts(data.d), dow = DOW[new Date(p.y, p.m - 1, p.d).getDay()];
-    return p.m + "/" + p.d + "(" + dow + ")";
-  }
-
-  function summary(data) {
-    var s = whenText(data);
-    if (data.d && data.s) s += " " + data.s + (data.e ? "–" + data.e : "");
-    s += " " + data.t;
-    if (data.p) s += " · " + data.p;
+  function timeText(x) { return x.d && x.s ? x.s + (x.e ? "–" + x.e : "") : ""; }
+  function summary(x) {
+    var s = whenText(x);
+    if (timeText(x)) s += " " + timeText(x);
+    s += " " + x.t;
+    if (x.p) s += " · " + x.p;
     return s;
   }
 
-  function googleUrl(data) {
-    var dates = data.s
-      ? compact(data.d) + "T" + hm(data.s) + "/" + endOf(data)
-      : compact(data.d) + "/" + nextDay(data.d);
-    var q = "action=TEMPLATE&text=" + encodeURIComponent(data.t) + "&dates=" + dates;
-    if (data.s && data.z) q += "&ctz=" + encodeURIComponent(data.z);
-    if (data.p) q += "&location=" + encodeURIComponent(data.p);
-    if (data.w && data.w.length) q += "&details=" + encodeURIComponent("함께: " + data.w.join(", "));
+  // ---------- 캘린더 ----------
+  function googleUrl(x) {
+    var dates = x.s ? compact(x.d) + "T" + hm(x.s) + "/" + endOf(x) : compact(x.d) + "/" + nextDay(x.d);
+    var q = "action=TEMPLATE&text=" + encodeURIComponent(x.t) + "&dates=" + dates;
+    if (x.s && x.z) q += "&ctz=" + encodeURIComponent(x.z);
+    if (x.p) q += "&location=" + encodeURIComponent(x.p);
     return "https://calendar.google.com/calendar/render?" + q;
   }
-
-  function esc(text) { return String(text).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;"); }
-
-  function icsText(data) {
+  function esc(t) { return String(t).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;"); }
+  function icsText(x) {
     var now = new Date();
-    var stamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) + "T" +
-      pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + "Z";
+    var stamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) + "T" + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + "Z";
     var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//hanmadi//link//KO", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
       "UID:" + stamp + "-" + Math.random().toString(36).slice(2) + "@hanmadi", "DTSTAMP:" + stamp];
-    if (data.s) {
+    if (x.s) {
       // 시간대 표기 없이 적으면 받는 사람 기기의 현지 시각으로 읽힌다.
-      lines.push("DTSTART:" + compact(data.d) + "T" + hm(data.s));
-      lines.push("DTEND:" + endOf(data));
+      lines.push("DTSTART:" + compact(x.d) + "T" + hm(x.s), "DTEND:" + endOf(x));
     } else {
-      lines.push("DTSTART;VALUE=DATE:" + compact(data.d));
-      lines.push("DTEND;VALUE=DATE:" + nextDay(data.d));
+      lines.push("DTSTART;VALUE=DATE:" + compact(x.d), "DTEND;VALUE=DATE:" + nextDay(x.d));
     }
-    lines.push("SUMMARY:" + esc(data.t));
-    if (data.p) lines.push("LOCATION:" + esc(data.p));
-    if (data.w && data.w.length) lines.push("DESCRIPTION:" + esc("함께: " + data.w.join(", ")));
+    lines.push("SUMMARY:" + esc(x.t));
+    if (x.p) lines.push("LOCATION:" + esc(x.p));
     lines.push("END:VEVENT", "END:VCALENDAR");
     return lines.join("\r\n") + "\r\n";
   }
 
+  // ---------- 답 보내기: 자동으로 보내지 않는다. 공유 창을 열거나 복사해 준다. ----------
   function say(text) { $("note").textContent = text; }
+  function send(text) {
+    show("copybox", false);
+    if (navigator.share) {
+      navigator.share({ text: text }).catch(function () {});
+      return;
+    }
+    var fallback = function () {
+      var box = $("copybox");
+      box.value = text;
+      show("copybox", true);
+      box.focus();
+      box.select();
+      say("아래 문장을 복사해서 대화방에 붙여 넣으세요.");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { say("답장을 복사했어요. 대화방에 붙여 넣으세요."); }, fallback);
+    } else {
+      fallback();
+    }
+  }
+  function replyLink(action, values, note) {
+    var r = { t: data.t, k: "r", a: action };
+    ["d", "s", "e", "p", "h", "z", "i"].forEach(function (key) { if (values[key]) r[key] = values[key]; });
+    if (note) r.n = note;
+    return base + "#" + encode(r);
+  }
+  // 앱이 깔려 있으면 앱으로 넘긴다. 없으면 이 페이지에 그대로 남는다.
+  function appLink(payload) {
+    return "intent://link/" + payload + "#Intent;scheme=hanmadi;package=app.hanmadi;S.browser_fallback_url=" + encodeURIComponent(location.href) + ";end";
+  }
+  function remember(key, value) { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (err) {} return null; }
 
+  // ---------- 화면 ----------
   var data = read();
   if (!data) {
-    $("invalid").hidden = false;
-    $("eyebrow").hidden = true;
+    show("invalid", true);
+    show("eyebrow", false);
     return;
+  }
+  var raw = location.hash.replace(/^#/, "");
+  var isReply = data.k === "r";
+
+  function paint(x) {
+    var when = $("when");
+    when.textContent = whenText(x);
+    if (timeText(x)) {
+      var time = document.createElement("span");
+      time.className = "time";
+      time.textContent = " " + timeText(x);
+      when.appendChild(time);
+    }
+    $("title").textContent = x.t;
+    var place = $("place");
+    place.textContent = x.p || "아직 안 정했어요";
+    place.className = x.p ? "" : "empty";
+    if (x.w && x.w.length) $("people").textContent = x.w.join(", ");
+    show("peopleRow", !!(x.w && x.w.length));
+    if (x.n) $("memo").textContent = x.n;
+    show("memoRow", !!x.n);
+    show("card", true);
   }
 
   document.title = "약속 · " + data.t;
-  var when = $("when");
-  when.textContent = whenText(data);
-  if (data.d && data.s) {
-    var time = document.createElement("span");
-    time.className = "time";
-    time.textContent = " " + data.s + (data.e ? "–" + data.e : "");
-    when.appendChild(time);
-  }
-  $("title").textContent = data.t;
-  var place = $("place");
-  place.textContent = data.p || "아직 안 정했어요";
-  if (!data.p) place.className = "empty";
-  if (data.w && data.w.length) $("people").textContent = data.w.join(", ");
-  else $("peopleRow").hidden = true;
-  $("card").hidden = false;
-  $("actions").hidden = false;
+  paint(data);
 
-  if (data.d) {
-    $("google").href = googleUrl(data);
-    $("ics").addEventListener("click", function () {
-      var blob = new Blob([icsText(data)], { type: "text/calendar;charset=utf-8" });
-      var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "약속.ics";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-      say("받은 파일을 열면 캘린더에 추가됩니다.");
-    });
-  } else {
-    // 날짜가 없으면 캘린더에 넣을 수 없다.
-    $("google").hidden = true;
-    $("ics").hidden = true;
-    say("날짜가 정해지면 캘린더에 추가할 수 있어요.");
+  if (isReply) {
+    // 보낸 사람이 받은 답장
+    var kinds = { ok: "수락했어요", no: "이번엔 어렵대요", change: "이렇게 바꾸자고 해요" };
+    $("eyebrow").textContent = "답장이 왔어요";
+    $("badge").textContent = kinds[data.a] || "답장";
+    show("badge", true);
+    show("reply", true);
+    if (isAndroid && data.i) {
+      $("applyInApp").href = appLink(raw);
+      show("applyInApp", true);
+      say("한마디 앱에서 열면 내 일정에 바로 반영됩니다.");
+    } else {
+      say(data.a === "change" ? "괜찮다면 약속을 이 내용으로 고치세요." : "");
+    }
+    return;
   }
+
+  // 받은 사람이 연 약속
+  function showAccepted() {
+    show("decide", false);
+    show("change", false);
+    show("accepted", true);
+    if (data.d) {
+      $("google").href = googleUrl(data);
+    } else {
+      show("calLabel", false);
+      show("calButtons", false);
+      say("날짜가 정해지면 캘린더에 추가할 수 있어요.");
+    }
+    if (isAndroid) {
+      $("openApp").href = appLink(raw);
+      show("openApp", true);
+    }
+  }
+
+  var seenKey = "hm:ok:" + raw.slice(-48);
+  if (remember(seenKey) === "1") showAccepted();
+  else show("decide", true);
 
   $("accept").addEventListener("click", function () {
-    var text = "좋아요! " + summary(data);
-    if (navigator.share) {
-      navigator.share({ text: text }).catch(function () {});
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(
-        function () { say("답장을 복사했어요. 대화방에 붙여 넣으세요."); },
-        function () { say(text); }
-      );
-    } else {
-      say(text);
-    }
+    remember(seenKey, "1");
+    showAccepted();
+    say("수락했다고 알리면 보낸 사람 쪽에도 표시됩니다.");
+  });
+  $("tellOk").addEventListener("click", function () {
+    send("좋아요! " + summary(data) + "\n" + replyLink("ok", data));
+  });
+  $("decline").addEventListener("click", function () {
+    send("이번엔 어려워요: " + summary(data) + "\n" + replyLink("no", data));
+  });
+  $("ics").addEventListener("click", function () {
+    var blob = new Blob([icsText(data)], { type: "text/calendar;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "약속.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    say("받은 파일을 열면 캘린더 앱에 추가됩니다.");
+  });
+
+  $("openChange").addEventListener("click", function () {
+    $("fDate").value = data.d || "";
+    $("fTime").value = data.s || "";
+    $("fPlace").value = data.p || "";
+    show("decide", false);
+    show("change", true);
+    say("바꾸고 싶은 칸만 고치세요.");
+  });
+  $("cancelChange").addEventListener("click", function () {
+    show("change", false);
+    show("decide", true);
+    say("");
+  });
+  $("change").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var next = { d: $("fDate").value || data.d, s: $("fTime").value || data.s, p: $("fPlace").value.trim() || data.p, z: data.z, i: data.i };
+    // 시각을 그대로 뒀을 때만 원래 끝 시각을 유지한다.
+    if (data.e && next.s === data.s) next.e = data.e;
+    if (!next.d) { delete next.s; next.h = data.h; }
+    var same = next.d === data.d && next.s === data.s && next.p === data.p;
+    var note = $("fNote").value.trim();
+    if (same && !note) { say("바뀐 내용이 없어요. 날짜, 시각, 장소 중 하나를 고쳐 주세요."); return; }
+    var view = { t: data.t, d: next.d, s: next.s, e: next.e, p: next.p, h: next.h };
+    send("이렇게 바꾸면 어때요? " + summary(view) + (note ? " (" + note + ")" : "") + "\n" + replyLink("change", next, note));
   });
 })();
 </script>
