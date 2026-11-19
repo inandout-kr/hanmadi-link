@@ -39,6 +39,8 @@
   }
   h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3; margin: 4px 6px 16px; }
 
+  /* 서버가 알려 준 상태 때문에 링크와 다른 내용을 보여 줄 때의 한 줄 */
+  .notice { background: var(--soft); color: var(--on-soft); font-size: 14.5px; font-weight: 600; border-radius: 16px; padding: 12px 16px; margin: 0 0 12px; overflow-wrap: anywhere; }
   .card { background: var(--card); border-radius: 24px; padding: 24px; }
   .badge { display: inline-block; font-size: 13px; font-weight: 700; color: var(--on-soft); background: var(--soft); border-radius: 999px; padding: 5px 12px; margin-bottom: 14px; }
   .was { font-size: 16px; font-weight: 600; color: var(--faint); text-decoration: line-through; font-variant-numeric: tabular-nums; margin-bottom: 2px; }
@@ -51,6 +53,12 @@
   dd { margin: 0; flex: 1; overflow-wrap: anywhere; }
   .empty { color: var(--sub); }
   p.empty { margin: 10px 0 0; }
+  /* 누가 동의했는지 */
+  .tally { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 15px; overflow-wrap: anywhere; }
+  .tally div:empty { display: none; }
+  .tally .ok { font-weight: 700; color: var(--on-soft); }
+  .tally .no { font-weight: 600; margin-top: 2px; }
+  .tally .more { color: var(--sub); font-size: 14px; margin-top: 4px; }
 
   /* 버튼은 엄지가 닿는 화면 아래쪽에 쌓는다. 넓은 화면에서는 카드 바로 아래에 둔다. */
   .actions { margin-top: auto; padding-top: 20px; }
@@ -66,6 +74,7 @@
   .btn.soft { background: var(--soft); color: var(--on-soft); }
   .btn.gray { background: var(--gray); color: var(--on-gray); }
   .btn.text { background: transparent; color: var(--sub); font-weight: 600; font-size: 15px; min-height: 46px; }
+  .btn:disabled { opacity: .5; cursor: default; }
   .btn:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 
   .done { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; margin: 0 6px 4px; }
@@ -85,6 +94,9 @@
   }
   input::placeholder { color: var(--faint); }
   form .note { margin-top: 14px; }
+  .who { display: block; margin-top: 12px; }
+  .who input { min-height: 48px; }
+  .who span { display: block; color: var(--sub); font-size: 13px; margin: 6px 6px 0; }
   .copybox { display: block; margin-top: 10px; width: 100%; min-height: 104px; font: inherit; font-size: 14px; color: var(--ink); background: var(--card); border: 0; border-radius: 14px; padding: 14px 16px; resize: vertical; }
 
   footer { color: var(--faint); font-size: 12.5px; text-align: center; margin-top: 24px; }
@@ -103,6 +115,7 @@
 <body>
 <main>
   <h1 id="headline">약속이 도착했어요</h1>
+  <p class="notice" id="notice" role="status" hidden></p>
 
   <section class="card" id="card" hidden>
     <div class="badge" id="badge" hidden></div>
@@ -114,6 +127,11 @@
       <div class="row" id="peopleRow"><dt>함께</dt><dd id="people"></dd></div>
       <div class="row" id="memoRow" hidden><dt>한마디</dt><dd id="memo"></dd></div>
     </dl>
+    <div class="tally" id="tally" role="status" hidden>
+      <div class="ok" id="tallyOk"></div>
+      <div class="no" id="tallyNo"></div>
+      <div class="more" id="tallyHint"></div>
+    </div>
   </section>
 
   <section class="card" id="invalid" hidden>
@@ -125,6 +143,12 @@
     <p class="note" id="note" role="status"></p>
     <textarea class="copybox" id="copybox" readonly hidden aria-label="복사할 문장"></textarea>
 
+    <!-- 이름은 묻지 않는다. 적어 두면 누가 답했는지 서로 보인다. -->
+    <label class="who" id="whoRow" hidden>
+      <input type="text" id="fName" maxlength="20" autocomplete="off" placeholder="이름 (선택)" aria-describedby="whoHint">
+      <span id="whoHint">적으면 누가 동의했는지 보여요</span>
+    </label>
+
     <!-- 1. 먼저 답한다: 약속이면 수락, 변경 요청이면 동의 -->
     <div class="stack" id="decide" hidden>
       <a class="btn primary" id="yesApp" hidden></a>
@@ -133,9 +157,15 @@
       <button class="btn text" id="no" type="button">이번엔 어려워요</button>
     </div>
 
+    <!-- 변경 요청을 보낸 사람: 동의가 모이면 여기서 모두의 약속을 바꾼다 -->
+    <div class="stack" id="owner" hidden>
+      <button class="btn primary" id="confirm" type="button">이대로 바꾸기</button>
+      <button class="btn text" id="drop" type="button">없던 일로</button>
+    </div>
+
     <!-- 2. 답한 뒤: 알리고, 내 캘린더에 반영한다 -->
     <div id="after" hidden>
-      <p class="done"><span class="tick" aria-hidden="true">✓</span><span id="doneText">수락했어요</span></p>
+      <p class="done" id="doneLine"><span class="tick" aria-hidden="true">✓</span><span id="doneText">수락했어요</span></p>
       <p class="note" id="afterNote" role="status"></p>
       <div class="stack">
         <a class="btn primary" id="appTop" hidden></a>
@@ -168,6 +198,7 @@
         <button class="btn primary" type="submit">이렇게 바꾸자고 보내기</button>
         <button class="btn text" id="cancelChange" type="button">돌아가기</button>
       </div>
+      <p class="hint" id="formHint" hidden>보낸 뒤 이 링크를 다시 열면 누가 동의했는지 보고, 모두의 약속을 바꿀 수 있어요.</p>
     </form>
 
     <!-- 4. 보낸 사람이 답장 링크를 열었을 때 -->
@@ -176,19 +207,42 @@
     </div>
   </div>
 
-  <footer>한마디로 만든 약속 · 이 페이지는 약속 내용을 어디에도 저장하지 않습니다</footer>
+  <footer id="foot">한마디로 만든 약속 · 이 페이지는 약속 내용을 어디에도 저장하지 않습니다</footer>
 </main>
 
 <script>
 (function () {
   "use strict";
+  // 약속 서버 주소. 비워 두면 서버 없이 동작한다: 동의 현황이 없고, 각자 자기 캘린더만 바꾼다.
+  // 서버가 응답하지 않을 때도 같은 동작으로 이어 간다.
+  var API = "https://hanmadi.naver-comments.workers.dev";
+
   var DOW = "일월화수목금토";
   var DATE = /^\d{4}-\d{2}-\d{2}$/, TIME = /^\d{2}:\d{2}$/;
+  var ID = /^[A-Za-z0-9_-]{8,64}$/, WHO = /^[A-Za-z0-9_-]{16,64}$/;
   var $ = function (id) { return document.getElementById(id); };
   var pad = function (n) { return (n < 10 ? "0" : "") + n; };
   var show = function (id, on) { $(id).hidden = !on; };
   var isAndroid = /Android/i.test(navigator.userAgent);
   var base = location.origin + location.pathname;
+
+  // 시험용: 내 PC에서 띄운 페이지에서만 ?api= 로 서버 주소를 바꿀 수 있다.
+  // 올려 둔 페이지에서는 무시한다. 남이 만든 링크가 다른 서버를 가리키게 할 수 없다.
+  var apiQuery = "";
+  if (/^(localhost|127\.0\.0\.1|10\.0\.2\.2)$/.test(location.hostname)) {
+    var found = /[?&]api=([^&#]+)/.exec(location.search);
+    if (found) {
+      try {
+        var given = decodeURIComponent(found[1]).replace(/\/+$/, "");
+        if (/^https?:\/\/[^\s]+$/.test(given)) {
+          API = given;
+          apiQuery = "api=" + encodeURIComponent(given);
+        }
+      } catch (err) {}
+    }
+  }
+  // 새 링크를 만들 때 쓰는 이 페이지의 주소
+  var page = base + (apiQuery ? "?" + apiQuery : "");
 
   // ---------- 링크 읽고 쓰기: 내용은 주소의 # 뒤에만 있다. 브라우저는 # 뒤를 서버로 보내지 않는다. ----------
   function decode(raw) {
@@ -270,10 +324,10 @@
   function icsText(x) {
     var now = new Date();
     var stamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) + "T" + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + "Z";
-    // 같은 약속은 언제나 같은 UID를 쓴다. 그래야 변경 요청의 파일(순번이 더 큼)이 전에 넣은 일정을 덮어쓴다.
+    // 같은 약속은 언제나 같은 UID를 쓴다. 그래야 바뀐 뒤의 파일(순번이 더 큼)이 전에 넣은 일정을 덮어쓴다.
     var id = x.i ? String(x.i).replace(/[^A-Za-z0-9._-]/g, "") : "";
     var uid = (id || stamp + "-" + Math.random().toString(36).slice(2)) + "@hanmadi";
-    var seq = x.k === "m" && typeof x.v === "number" && isFinite(x.v) && x.v > 0 ? Math.min(Math.floor(x.v), 2147483647) : 0;
+    var seq = typeof x.v === "number" && isFinite(x.v) && x.v > 0 ? Math.min(Math.floor(x.v), 2147483647) : 0;
     var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//hanmadi//link//KO", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
       "UID:" + uid, "DTSTAMP:" + stamp, "SEQUENCE:" + seq];
     if (x.s) {
@@ -325,25 +379,236 @@
     var r = { t: data.t, k: "r", a: action };
     ["d", "s", "e", "p", "h", "z", "i"].forEach(function (key) { if (values[key]) r[key] = values[key]; });
     if (note) r.n = note;
-    return base + "#" + encode(r);
+    return page + "#" + encode(r);
   }
   // 앱이 깔려 있으면 앱으로 넘긴다. 없으면 fallback 주소(기본은 지금 이 페이지)가 열린다.
   function appLink(payload, fallback) {
     return "intent://link/" + payload + "#Intent;scheme=hanmadi;package=app.hanmadi;S.browser_fallback_url=" + encodeURIComponent(fallback || location.href) + ";end";
   }
-  function remember(key, value) { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (err) {} return null; }
+  // 브라우저가 저장을 막아 두었으면 이 화면이 떠 있는 동안만 기억한다.
+  var memory = {};
+  function remember(key, value) {
+    if (value === undefined) {
+      try {
+        var kept = localStorage.getItem(key);
+        if (kept !== null) return kept;
+      } catch (err) {}
+      return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : null;
+    }
+    memory[key] = value;
+    try { localStorage.setItem(key, value); } catch (err) {}
+    return null;
+  }
 
-  // ---------- 화면 ----------
-  var data = read();
-  if (!data) {
+  // 같은 탭에서 다른 링크로 바뀌면 처음부터 다시 읽는다.
+  window.addEventListener("hashchange", function () { location.reload(); });
+
+  // ---------- 링크에 든 내용 ----------
+  var link = read();
+  if (!link) {
     show("invalid", true);
     show("headline", false);
     return;
   }
-  var raw = location.hash.replace(/^#/, "");
-  var kind = data.k === "r" ? "reply" : data.k === "m" ? "move" : "invite";
+  var linkRaw = location.hash.replace(/^#/, "");
+  var linkKind = link.k === "r" ? "reply" : link.k === "m" ? "move" : "invite";
+  // 앱이 없어서 이 페이지로 되돌아온 경우(주소에 ok=1)에는 앱 버튼을 다시 보여 주지 않는다.
+  var cameBack = /[?&]ok=1(?:&|$)/.test(location.search);
 
+  // 지금 화면에 보여 주는 내용. 보통은 링크 그대로이고, 서버가 "그 뒤에 바뀌었다"고 하면 서버의 내용이다.
+  var data = link, raw = linkRaw, kind = linkKind;
+  /** 서버 상태 때문에 링크와 다른 것을 보여 줄 때의 안내 한 줄 */
+  var notice = "";
+  /** 더 답할 것이 없는 화면(취소된 요청, 지난 요청) */
+  var closed = null;
+  /** 이 링크의 요청이 이미 확정됐는데, 서버에는 그 뒤의 요청만 남아 있다 */
+  var settled = false;
+
+  // ---------- 서버: 누가 동의했는지 모으고, 확정되면 약속을 가진 모두에게 알린다 ----------
+  var id = typeof link.i === "string" && ID.test(link.i) ? link.i : "";
+  var who = "", myName = "";
+  if (API && id && linkKind !== "reply" && window.fetch && window.crypto && window.Promise) {
+    // 기기마다 만드는 임의의 값. 같은 사람이 두 번 세어지지 않게만 쓰고, 누구인지는 담지 않는다.
+    who = remember("hanmadi.who") || "";
+    if (!WHO.test(who)) {
+      var bytes = new Uint8Array(16), bin = "";
+      window.crypto.getRandomValues(bytes);
+      for (var b = 0; b < bytes.length; b++) bin += String.fromCharCode(bytes[b]);
+      who = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      remember("hanmadi.who", who);
+    }
+    myName = String(remember("hanmadi.name") || "").trim().slice(0, 20);
+  }
+  var online = !!who;
+  /** 서버가 알려 준 이 약속의 지금 상태. 모르면 null. */
+  var srv = null;
+  /** 서버가 한 번이라도 답했는지 */
+  var reachable = false;
+  var sent = 0, applied = 0;
+
+  // 내용은 text/plain으로 보낸다. 브라우저가 미리 물어보는 요청(preflight) 없이 한 번에 간다.
+  // 6초 안에 답이 없거나 실패하면 null. 그때 페이지는 서버 없이 하던 대로 한다.
+  function call(op, extra) {
+    if (!online) return Promise.resolve(null);
+    var body = { who: who, op: op };
+    if (myName) body.name = myName;
+    if (extra) Object.keys(extra).forEach(function (k) { body[k] = extra[k]; });
+    var n = ++sent, timer;
+    var ctl = window.AbortController ? new AbortController() : null;
+    var gaveUp = new Promise(function (resolve) {
+      timer = setTimeout(function () {
+        if (ctl) ctl.abort();
+        resolve(null);
+      }, 6000);
+    });
+    var asked = fetch(API + "/v1/a/" + id, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(body),
+      signal: ctl ? ctl.signal : undefined,
+      credentials: "omit",
+      cache: "no-store"
+    }).then(function (res) {
+      return res.json().then(function (json) { return { n: n, status: res.status, data: json }; });
+    }).then(null, function () { return null; });
+    return Promise.race([asked, gaveUp]).then(function (r) {
+      clearTimeout(timer);
+      return r;
+    });
+  }
+  /** 서버의 답을 화면에 반영한다. 늦게 도착한 옛 답은 버린다. */
+  function take(r) {
+    if (!r) return r;
+    reachable = true;
+    if (r.n < applied) return r;
+    if (r.status === 200 && r.data && r.data.id === id) {
+      applied = r.n;
+      adopt(r.data);
+      render();
+    } else if (r.status === 404) {
+      applied = r.n;
+      adopt(null);
+      render();
+    }
+    return r;
+  }
+  function post(op, extra) { return call(op, extra).then(take); }
+  function refresh() { return post("get"); }
+  var done200 = function (r) { return !!r && r.status === 200; };
+
+  /** 변경 요청의 번호. 링크의 v이고, 서버는 번호가 큰 것을 새 요청으로 본다. */
+  function qOf(x) { return x.k === "m" && typeof x.v === "number" && isFinite(x.v) && x.v >= 1 && Math.floor(x.v) === x.v ? x.v : null; }
+  /** 지금 보고 있는 요청에 대한 서버의 기록. 서버가 이 요청을 모르면 null. */
+  function curAsk() { var q = qOf(data); return srv && srv.ask && q !== null && srv.ask.q === q ? srv.ask : null; }
+  /** local: 서버가 모르는 요청(또는 서버 없음), open: 동의를 모으는 중, done: 확정됨 */
+  function state() { var a = curAsk(); return a ? a.st : settled ? "done" : "local"; }
+  function me() { return (srv && srv.me) || {}; }
+  function fullBase(x) { var o = { t: x.t }; ["d", "s", "e", "p", "z"].forEach(function (k) { if (x[k]) o[k] = x[k]; }); return o; }
+  // 변경 요청 링크는 원래 날짜와 시각만 안다. 끝 시각과 장소는 아는 사람(보낸 사람의 앱)이 채운다.
+  function thinBase(x) { var o = { t: x.t }; if (x.od) { o.d = x.od; if (x.os) o.s = x.os; } if (x.z) o.z = x.z; return o; }
+  function toOf(x) { var o = {}; ["d", "s", "e", "p", "n"].forEach(function (k) { if (x[k]) o[k] = x[k]; }); return o; }
+  function vote(answer) {
+    var q = qOf(data);
+    if (q === null || !data.d) return Promise.resolve(null);
+    return post("vote", { q: q, a: answer, to: toOf(data), base: thinBase(data) });
+  }
+
+  /** 서버에 열려 있는 요청을 변경 요청 링크와 같은 모양으로 만든다. */
+  function fromAsk(view) {
+    var a = view.ask, x = { t: view.t, k: "m", d: a.d, i: id, v: a.q };
+    if (a.s) x.s = a.s;
+    if (a.s && a.e) x.e = a.e;
+    var place = a.p != null ? a.p : view.p;
+    if (place) x.p = place;
+    if (a.from && a.from.d) {
+      x.od = a.from.d;
+      if (a.from.s) x.os = a.from.s;
+    }
+    if (a.n) x.n = a.n;
+    if (view.z) x.z = view.z;
+    return x;
+  }
+  /** 서버에 확정돼 있는 내용을 약속 링크와 같은 모양으로 만든다. */
+  function fromBase(view) {
+    var x = { t: view.t, i: id };
+    if (view.d) {
+      x.d = view.d;
+      if (view.s) x.s = view.s;
+      if (view.s && view.e) x.e = view.e;
+    }
+    if (view.p) x.p = view.p;
+    if (view.z) x.z = view.z;
+    if (linkKind === "invite" && link.w && link.w.length) x.w = link.w;
+    // 캘린더 파일이 전에 넣은 일정을 덮어쓰도록, 마지막으로 확정된 요청의 번호를 순번으로 쓴다.
+    // 서버는 가장 새 요청만 알려 준다. 그 요청이 확정된 것이 아니면, 확정된 요청은 그보다 번호가 작다.
+    if (view.v > 0 && view.ask) x.v = view.ask.st === "done" ? view.ask.q : view.ask.q - 1;
+    return x;
+  }
+  function differs(x, view) {
+    return (x.d || null) !== (view.d || null) || ((x.d && x.s) || null) !== (view.s || null) || (x.p || null) !== (view.p || null);
+  }
+  /** 서버가 알려 준 상태에 맞춰 무엇을 보여 줄지 정한다. 서버가 모르는 약속이면 링크 그대로다. */
+  function adopt(view) {
+    srv = view;
+    data = link;
+    kind = linkKind;
+    notice = "";
+    closed = null;
+    settled = false;
+    if (view) {
+      var ask = view.ask, mine = !!(view.me && view.me.mine), lq = qOf(link);
+      if (linkKind === "invite") {
+        if (ask && ask.st === "open") {
+          data = fromAsk(view);
+          kind = "move";
+          // 내가 보낸 요청이면 카드의 표시("내가 보낸 변경 요청")로 충분하다.
+          notice = mine ? "" : "이 약속을 바꾸자는 요청이 와 있어요.";
+        } else if (view.v > 0 && differs(link, view)) {
+          data = fromBase(view);
+          notice = "이 약속은 그 뒤에 " + dayTime(data) + "로 바뀌었어요.";
+        }
+      } else if (linkKind === "move" && ask && lq !== null) {
+        if (ask.q === lq && ask.st === "dropped") {
+          data = fromBase(view);
+          kind = "invite";
+          closed = { headline: "취소된 요청이에요", badge: "취소됨", calendar: false };
+          notice = "약속은 그대로예요: " + dayTime(data);
+        } else if (ask.q > lq && ask.st === "open") {
+          data = fromAsk(view);
+          notice = mine ? "" : "지난 요청이에요. 지금은 이 요청이 열려 있어요.";
+        } else if (ask.q > lq && view.v > 0 && !differs(link, view)) {
+          // 이 링크의 요청대로 이미 바뀌어 있다. 서버는 가장 새 요청만 기억하므로 내용으로 알아본다.
+          settled = true;
+        } else if (ask.q > lq) {
+          data = fromBase(view);
+          kind = "invite";
+          closed = { headline: "지난 요청이에요", badge: "지난 요청", calendar: true };
+          notice = "지금 약속: " + dayTime(data);
+        }
+      }
+    }
+    raw = data === link ? linkRaw : encode(data);
+  }
+
+  // 앱으로 넘길 때는 이 페이지의 기기 값(u)을 같이 준다. 페이지에서 한 답과 앱에서 한 답이 한 사람으로 세어지게 할 수 있다.
+  function forApp(x) { return online ? encode(withKey(x, "u", who)) : (x === link ? linkRaw : encode(x)); }
+  // 앱에는 "링크 페이지에서 이미 동의했다"는 표시를 붙여 넘긴다.
+  function okForApp() { return encode(withKey(online ? withKey(data, "u", who) : data, "a", "ok")); }
+  function seenKey() { return "hm:ok:" + linkRaw.slice(-48); }
+  function agreeKey() { return "hm:mv:" + (id && qOf(data) !== null ? id + ":" + data.v : raw.slice(-48)); }
+  function accepted() { return remember(seenKey()) === "1" || !!me().member; }
+  function agreed() { return remember(agreeKey()) === "1" || !!(curAsk() && me().vote === "ok"); }
+
+  // ---------- 화면 ----------
+  function setText(elId, value) {
+    var el = $(elId);
+    if (el.textContent !== value) el.textContent = value;
+    return el;
+  }
+  var painted = null;
   function paint(x) {
+    if (painted === kind + "|" + raw) return;
+    painted = kind + "|" + raw;
     var was = kind === "move" ? wasText(x) : "";
     $("was").textContent = was;
     if (was) $("was").setAttribute("aria-label", "원래 " + was);
@@ -367,7 +632,219 @@
     show("card", true);
   }
 
-  function downloadIcs() {
+  /** "3명 동의 · 민수, 서연 외 1명"에서 이름 부분. 이름을 적지 않은 사람은 수로만 센다. */
+  function names(count, list) {
+    if (!list || !list.length) return "";
+    var rest = count - list.length;
+    return " · " + list.join(", ") + (rest > 0 ? " 외 " + rest + "명" : "");
+  }
+  function tally() {
+    var ok = "", no = "", more = "";
+    if (srv && !closed && kind === "move") {
+      var a = curAsk();
+      if (a) {
+        if (a.ok > 0) ok = a.ok + "명 동의" + names(a.ok, a.okNames);
+        if (a.no > 0) no = a.no + "명은 어렵대요" + names(a.no, a.noNames);
+        if (a.st === "open") {
+          var needs = typeof a.need === "number";
+          if (me().mine) {
+            if (a.no > 0) more = "어렵다는 사람이 있어요. 그래도 바꾸려면 ‘이대로 바꾸기’를 눌러 주세요.";
+            else if (needs && a.need > 0) more = a.need + "명만 더 동의하면 저절로 바뀌어요. 지금 바꿔도 됩니다.";
+            else if (a.ok > 0) more = "다들 좋다고 하면 ‘이대로 바꾸기’를 눌러 주세요. 모두의 약속이 바뀝니다.";
+            else more = "아직 답한 사람이 없어요. 답이 오면 여기에 보여요.";
+          } else if (me().vote === "no") {
+            more = "어렵다고 답했어요. 마음이 바뀌면 다시 눌러 주세요.";
+          } else if (needs) {
+            more = a.need > 0 ? a.need + "명만 더 동의하면 바뀌어요" : "";
+          } else {
+            more = "요청한 사람이 확정하면 모두 바뀌어요";
+          }
+        }
+      }
+    } else if (srv && !closed && kind === "invite") {
+      if (srv.going > 0) ok = srv.going + "명 수락" + names(srv.going, srv.goingNames);
+      if (srv.cant > 0) no = srv.cant + "명은 어렵대요" + names(srv.cant, srv.cantNames);
+    }
+    setText("tallyOk", ok);
+    setText("tallyNo", no);
+    setText("tallyHint", more);
+    show("tally", !!(ok || no || more));
+  }
+
+  function head() {
+    var title = "약속이 도착했어요", badge = "";
+    if (kind === "reply") {
+      title = "답장이 왔어요";
+      badge = { ok: "수락했어요", no: "이번엔 어렵대요", change: "이렇게 바꾸자고 해요" }[data.a] || "답장";
+    } else if (closed) {
+      title = closed.headline;
+      badge = closed.badge;
+    } else if (kind === "move") {
+      var a = curAsk();
+      title = state() === "done" ? "약속이 바뀌었어요" : "약속을 바꾸자는 요청이에요";
+      badge = a && me().mine ? "내가 보낸 변경 요청" : a && a.by ? a.by + " 님의 변경 요청" : "변경 요청";
+    }
+    setText("headline", title);
+    setText("badge", badge);
+    show("badge", !!badge);
+    document.title = (kind === "move" ? "변경 요청 · " : "약속 · ") + data.t;
+  }
+
+  // 날짜가 있어야 캘린더에 넣을 수 있다.
+  function calendar(label, icsLabel, googleLabel, hint) {
+    var can = !!data.d;
+    show("calLabel", can);
+    show("calButtons", can);
+    show("calHint", can && !!hint);
+    if (!can) {
+      say("날짜가 정해지면 캘린더에 넣을 수 있어요.");
+      return;
+    }
+    $("calLabel").textContent = label;
+    $("ics").textContent = icsLabel;
+    $("google").textContent = googleLabel;
+    $("google").href = googleUrl(data);
+    $("calHint").textContent = hint || "";
+  }
+
+  // ---------- 보낸 사람이 받은 답장 ----------
+  function replyView() {
+    show("reply", true);
+    if (isAndroid && data.i) {
+      $("applyInApp").href = appLink(raw);
+      show("applyInApp", true);
+      say("한마디 앱에서 열면 내 일정에 바로 반영됩니다.");
+    } else {
+      say(data.a === "change" ? "괜찮다면 약속을 이 내용으로 고치세요." : "");
+    }
+  }
+
+  // ---------- 받은 사람이 연 약속 ----------
+  function inviteView() {
+    $("yes").textContent = "수락";
+    $("openChange").textContent = "시간·장소 바꾸자고 하기";
+    $("no").textContent = "이번엔 어려워요";
+    show("yes", true);
+    show("yesApp", false);
+    if (!accepted()) {
+      show("decide", true);
+      return;
+    }
+    show("after", true);
+    show("doneLine", true);
+    $("doneText").textContent = "수락했어요";
+    $("tell").textContent = "보낸 사람에게 알리기";
+    $("tell").className = "btn primary";
+    show("tell", true);
+    show("appTop", false);
+    calendar("내 캘린더에 추가", "캘린더 파일 받기 (아이폰·삼성·네이버)", "구글 캘린더", "");
+    if (isAndroid) {
+      $("appBottom").textContent = "한마디 앱에 넣기";
+      $("appBottom").href = appLink(forApp(data));
+    }
+    show("appBottom", isAndroid);
+    // 이미 잡힌 약속을 옮겨야 할 때: 이 링크를 다시 열어 여기서 바꾸자고 하면 된다.
+    show("later", true);
+  }
+
+  // ---------- 모두에게 온 변경 요청 ----------
+  // 서버가 없으면 동의한 사람의 일정만 바뀐다. 서버가 있으면 동의가 모이고, 확정되면 모두의 약속이 바뀐다.
+  function moveView() {
+    var st = state(), mine = !!(curAsk() && me().mine);
+    $("yes").textContent = "좋아요, 바꿀게요";
+    $("openChange").textContent = "다른 때로 하자고 하기";
+    $("no").textContent = "그때는 어려워요";
+    if (st === "done") {
+      agreedView("바뀌었어요", mine ? "바뀌었다고 알리기" : "");
+    } else if (mine) {
+      show("owner", true);
+    } else if (agreed()) {
+      agreedView(reachable ? "동의했어요" : "바꾸기로 했어요", "좋다고 알리기");
+    } else {
+      show("decide", true);
+      if (isAndroid) {
+        // 앱이 있으면 앱이 열려 거기서 답하고, 없으면 이 페이지가 동의한 상태로 다시 열린다.
+        $("yesApp").textContent = "좋아요, 바꿀게요";
+        $("yesApp").href = appLink(okForApp(), page + (apiQuery ? "&" : "?") + "ok=1#" + raw);
+      }
+      show("yesApp", isAndroid);
+      show("yes", !isAndroid);
+    }
+  }
+  function agreedView(text, tellText) {
+    var st = state(), toApp = isAndroid && !cameBack;
+    show("after", true);
+    show("doneLine", true);
+    $("doneText").textContent = text;
+    $("tell").textContent = tellText;
+    $("tell").className = "btn soft";
+    show("tell", !!tellText);
+    if (toApp) {
+      $("appTop").textContent = st === "open" ? "한마디 앱에서 열기" : "한마디 앱 일정 바꾸기";
+      $("appTop").href = appLink(okForApp());
+    }
+    show("appTop", toApp);
+    show("appBottom", false);
+    calendar(st === "open" ? "바뀐 날짜로 캘린더에 넣기" : "내 캘린더도 바꾸기", "캘린더 파일 받기", "구글 캘린더에 새로 넣기",
+      "전에 캘린더 파일로 넣은 일정은 그 자리에서 바뀝니다. 구글 캘린더 버튼은 새로 넣으니 예전 일정은 지워 주세요.");
+    show("later", false);
+  }
+
+  // ---------- 취소된 요청, 지난 요청: 지금 약속만 보여 준다 ----------
+  function closedView() {
+    if (!closed.calendar || !data.d) return;
+    show("after", true);
+    show("doneLine", false);
+    show("tell", false);
+    show("appTop", false);
+    calendar("내 캘린더에 넣기", "캘린더 파일 받기", "구글 캘린더", "");
+    if (isAndroid) {
+      $("appBottom").textContent = "한마디 앱에 넣기";
+      $("appBottom").href = appLink(forApp(data));
+    }
+    show("appBottom", isAndroid);
+    show("later", false);
+  }
+
+  // 이름 칸은 단추 가까이에 둔다: 답하기 전에는 단추 위, 답한 뒤에는 캘린더 단추 아래.
+  function placeWho() {
+    // 서버가 한 번이라도 답한 뒤에만 보여 준다. 닿지 않을 때는 적어도 쓸 데가 없다.
+    // 요청을 보낸 사람의 이름은 요청을 만들 때 이미 올라갔고, 확정된 뒤에는 더 답할 것이 없다.
+    var on = online && reachable && kind !== "reply" && !closed && !(curAsk() && me().mine) && !(kind === "move" && state() === "done");
+    show("whoRow", on);
+    if (!on) return;
+    var row = $("whoRow");
+    if (!$("after").hidden) $("after").insertBefore(row, $("later"));
+    else $("decide").parentNode.insertBefore(row, $("decide"));
+    setText("whoHint", kind === "move" ? "적으면 누가 동의했는지 보여요" : "적으면 누가 수락했는지 보여요");
+  }
+
+  var lastKey = null;
+  /** 지금 상태대로 화면을 맞춘다. 단추 구역은 상태가 달라졌을 때만 다시 짠다(안내 문장을 지우지 않게). */
+  function render(force) {
+    paint(data);
+    head();
+    setText("notice", notice);
+    show("notice", !!notice);
+    tally();
+    // 바꾸자는 내용을 적는 중에는 단추를 건드리지 않는다. 닫을 때 다시 맞춘다.
+    if (!$("change").hidden) {
+      lastKey = null;
+      return;
+    }
+    var key = [kind, closed ? closed.headline : "", raw, state(), !!(curAsk() && me().mine), agreed(), accepted(), reachable].join("|");
+    if (key === lastKey && !force) return;
+    lastKey = key;
+    ["decide", "owner", "after", "reply"].forEach(function (part) { show(part, false); });
+    if (kind === "reply") replyView();
+    else if (closed) closedView();
+    else if (kind === "move") moveView();
+    else inviteView();
+    placeWho();
+  }
+
+  // ---------- 단추 ----------
+  $("ics").addEventListener("click", function () {
     var blob = new Blob([icsText(data)], { type: "text/calendar;charset=utf-8" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -377,32 +854,107 @@
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
     say(kind === "move" ? "받은 파일을 열면 캘린더의 일정이 바뀝니다." : "받은 파일을 열면 캘린더 앱에 추가됩니다.");
+  });
+
+  $("yes").addEventListener("click", function () {
+    if (kind === "move") {
+      remember(agreeKey(), "1");
+      render(true);
+      vote("ok");
+      return;
+    }
+    remember(seenKey(), "1");
+    render(true);
+    var askTell = "수락했다고 알리면 보낸 사람 쪽에도 표시됩니다.";
+    if (data.d) say(askTell);
+    post("join", { base: fullBase(link) }).then(function (r) {
+      // 서버에 올라갔으면 따로 알리지 않아도 보낸 사람 쪽에 보인다.
+      if (done200(r) && $("afterNote").textContent === askTell) say("수락한 것을 보낸 사람도 볼 수 있어요.");
+    });
+  });
+  $("yesApp").addEventListener("click", function () {
+    // 여기서는 서버에 답하지 않는다. 앱이 열리면 앱이 답하고, 앱이 없으면 되돌아온 페이지(ok=1)가 답한다.
+    remember(agreeKey(), "1");
+    // 앱으로 넘어가는 것을 막지 않도록 화면은 조금 뒤에 바꾼다.
+    setTimeout(function () { render(true); }, 400);
+  });
+  $("tell").addEventListener("click", function () {
+    if (kind !== "move") {
+      send("좋아요! " + summary(data) + "\n" + replyLink("ok", data));
+    } else if (state() === "done") {
+      send(data.t + " 약속이 " + dayTime(data) + "로 바뀌었어요\n" + page + "#" + raw);
+    } else {
+      send(data.d ? "좋아요! " + data.t + " " + dayTime(data) + "로 바꿔요" : "좋아요! 그렇게 바꿔요");
+    }
+  });
+  $("no").addEventListener("click", function () {
+    if (kind === "move") {
+      vote("no");
+      send("그때는 어려워요: " + summary(data));
+    } else {
+      post("leave", { base: fullBase(link) });
+      send("이번엔 어려워요: " + summary(data) + "\n" + replyLink("no", data));
+    }
+  });
+
+  // 요청한 사람: 확정하면 약속을 가진 모두의 일정이 바뀐다.
+  function settle(op, extra, doneNote) {
+    var q = qOf(data);
+    if (q === null) return;
+    $("confirm").disabled = $("drop").disabled = true;
+    extra.q = q;
+    post(op, extra).then(function (r) {
+      $("confirm").disabled = $("drop").disabled = false;
+      if (done200(r)) {
+        if (doneNote) say(doneNote);
+      } else if (r) {
+        // 그 사이 다른 요청이 올라왔거나 이미 끝난 요청이다. 지금 상태를 다시 받아 보여 준다.
+        refresh();
+      } else {
+        say("지금은 연결이 안 돼요. 잠시 뒤에 다시 눌러 주세요.");
+      }
+    });
   }
-  $("ics").addEventListener("click", downloadIcs);
+  $("confirm").addEventListener("click", function () {
+    settle("confirm", { to: toOf(data), base: thinBase(data) }, "모두의 약속이 바뀌었어요. 앱을 쓰지 않는 사람에게는 알려 주세요.");
+  });
+  $("drop").addEventListener("click", function () { settle("drop", {}, ""); });
+
+  $("fName").addEventListener("change", function () {
+    myName = this.value.replace(/\s+/g, " ").trim().slice(0, 20);
+    this.value = myName;
+    remember("hanmadi.name", myName);
+    // 이미 답했으면 같은 답을 이름과 함께 다시 보낸다.
+    if (!online || !srv || !myName || closed || !$("change").hidden) return;
+    var a = curAsk();
+    if (kind === "move" && a && a.st === "open" && me().vote) vote(me().vote);
+    else if (kind === "invite" && me().member) post("join", { base: fullBase(link) });
+  });
 
   // ---------- 바꾸자고 하기: 약속에 있는 누구나 변경 요청을 만들 수 있다 ----------
-  var backTo = "decide";
-  function openForm(from) {
-    backTo = from;
+  function openForm() {
     $("fDate").value = data.d || "";
     $("fTime").value = (data.d && data.s) || "";
     $("fPlace").value = data.p || "";
     $("fNote").value = "";
-    show("decide", false);
-    show("after", false);
-    show("copybox", false);
+    ["decide", "owner", "after", "copybox", "formHint"].forEach(function (part) { show(part, false); });
     show("change", true);
+    if (online && reachable) {
+      show("whoRow", true);
+      $("change").insertBefore($("whoRow"), $("formNote"));
+      setText("whoHint", "적으면 누가 보낸 요청인지 보여요");
+    }
     say("");
     var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     $("change").scrollIntoView({ block: "start", behavior: calm ? "auto" : "smooth" });
   }
-  $("openChange").addEventListener("click", function () { openForm("decide"); });
-  $("changeLater").addEventListener("click", function () { openForm("after"); });
+  $("openChange").addEventListener("click", openForm);
+  $("changeLater").addEventListener("click", openForm);
   $("cancelChange").addEventListener("click", function () {
     show("change", false);
     show("copybox", false);
-    show(backTo, true);
     say("");
+    render(true);
   });
   $("change").addEventListener("submit", function (ev) {
     ev.preventDefault();
@@ -435,146 +987,46 @@
       if (orig.s) m.os = orig.s;
     }
     if (note) m.n = note;
+    // 요청 번호는 만든 시각(분)이다. 서버에 더 큰 번호가 있으면 그보다 크게 잡아야 새 요청으로 받아 준다.
     m.v = Math.floor(Date.now() / 60000);
-    send("약속을 바꿀 수 있을까요?\n" + moveSummary(m) + (note ? " (" + note + ")" : "") + "\n괜찮으면 눌러 주세요 " + base + "#" + encode(m));
+    if (srv && srv.ask && srv.ask.q >= m.v) m.v = srv.ask.q + 1;
+    if (online && m.d) {
+      post("ask", { q: m.v, to: toOf(m), base: kind === "move" ? thinBase(data) : fullBase(data) });
+      show("formHint", true);
+    }
+    send("약속을 바꿀 수 있을까요?\n" + moveSummary(m) + (note ? " (" + note + ")" : "") + "\n괜찮으면 눌러 주세요 " + page + "#" + encode(m));
   });
 
-  // 날짜가 있어야 캘린더에 넣을 수 있다.
-  function calendar(label, icsLabel, googleLabel, hint) {
-    if (!data.d) {
-      show("calLabel", false);
-      show("calButtons", false);
-      show("calHint", false);
-      say("날짜가 정해지면 캘린더에 넣을 수 있어요.");
-      return;
+  // ---------- 시작 ----------
+  if (cameBack && linkKind === "move") remember(agreeKey(), "1");
+  render();
+  if (!online) return;
+
+  $("fName").value = myName;
+  $("foot").textContent = "한마디로 만든 약속 · 답하면 약속 내용과 답이 한마디 서버에 저장됩니다";
+
+  // 앱이 없어 되돌아왔으면 여기서 동의를 보낸다. 그 밖에는 지금 상태만 묻는다.
+  var first = cameBack && linkKind === "move" && qOf(link) !== null && link.d ? vote("ok") : refresh();
+  first.then(function (r) {
+    if (!r || closed) return;
+    // 서버가 없던 때(또는 닿지 않던 때) 이 브라우저에서 이미 한 답을 올려 둔다.
+    if (kind === "invite" && linkKind === "invite") {
+      if (remember(seenKey()) === "1" && !me().member) post("join", { base: fullBase(link) });
+    } else if (kind === "move" && !isAndroid) {
+      // 안드로이드에서는 앱이 자기 값으로 답했을 수 있어서 여기서 다시 보내지 않는다.
+      var a = curAsk();
+      if (remember(agreeKey()) === "1" && state() !== "done" && !(a && (me().vote || me().mine))) vote("ok");
     }
-    $("calLabel").textContent = label;
-    $("ics").textContent = icsLabel;
-    $("google").textContent = googleLabel;
-    $("google").href = googleUrl(data);
-    $("calHint").textContent = hint || "";
-    show("calHint", !!hint);
-  }
+  });
 
-  // ---------- 보낸 사람이 받은 답장 ----------
-  function replyView() {
-    var kinds = { ok: "수락했어요", no: "이번엔 어렵대요", change: "이렇게 바꾸자고 해요" };
-    $("headline").textContent = "답장이 왔어요";
-    $("badge").textContent = kinds[data.a] || "답장";
-    show("badge", true);
-    show("reply", true);
-    if (isAndroid && data.i) {
-      $("applyInApp").href = appLink(raw);
-      show("applyInApp", true);
-      say("한마디 앱에서 열면 내 일정에 바로 반영됩니다.");
-    } else {
-      say(data.a === "change" ? "괜찮다면 약속을 이 내용으로 고치세요." : "");
-    }
-  }
-
-  // ---------- 받은 사람이 연 약속 ----------
-  function inviteView() {
-    var seenKey = "hm:ok:" + raw.slice(-48);
-    var showAccepted = function () {
-      show("decide", false);
-      show("change", false);
-      show("after", true);
-      $("doneText").textContent = "수락했어요";
-      $("tell").textContent = "보낸 사람에게 알리기";
-      $("tell").className = "btn primary";
-      calendar("내 캘린더에 추가", "캘린더 파일 받기 (아이폰·삼성·네이버)", "구글 캘린더", "");
-      if (isAndroid) {
-        $("appBottom").textContent = "한마디 앱에 넣기";
-        $("appBottom").href = appLink(raw);
-        show("appBottom", true);
-      }
-      // 이미 잡힌 약속을 옮겨야 할 때: 이 링크를 다시 열어 여기서 바꾸자고 하면 된다.
-      show("later", true);
-    };
-    $("headline").textContent = "약속이 도착했어요";
-    if (remember(seenKey) === "1") showAccepted();
-    else show("decide", true);
-
-    $("yes").addEventListener("click", function () {
-      remember(seenKey, "1");
-      showAccepted();
-      if (data.d) say("수락했다고 알리면 보낸 사람 쪽에도 표시됩니다.");
-    });
-    $("tell").addEventListener("click", function () {
-      send("좋아요! " + summary(data) + "\n" + replyLink("ok", data));
-    });
-    $("no").addEventListener("click", function () {
-      send("이번엔 어려워요: " + summary(data) + "\n" + replyLink("no", data));
-    });
-  }
-
-  // ---------- 모두에게 온 변경 요청: 동의한 사람의 일정이 바뀐다 ----------
-  function moveView() {
-    var agreeKey = "hm:mv:" + raw.slice(-48);
-    // 앱에는 "링크 페이지에서 이미 동의했다"는 표시를 붙여 넘긴다.
-    var okRaw = encode(withKey(data, "a", "ok"));
-    // 앱이 없어서 이 페이지로 되돌아온 경우(주소에 ok=1)에는 앱 버튼을 다시 보여 주지 않는다.
-    var cameBack = /[?&]ok=1(?:&|$)/.test(location.search);
-    var showAgreed = function () {
-      show("decide", false);
-      show("change", false);
-      show("after", true);
-      $("doneText").textContent = "바꾸기로 했어요";
-      $("tell").textContent = "좋다고 알리기";
-      $("tell").className = "btn soft";
-      if (isAndroid && !cameBack) {
-        $("appTop").textContent = "한마디 앱 일정 바꾸기";
-        $("appTop").href = appLink(okRaw);
-        show("appTop", true);
-      }
-      calendar("내 캘린더도 바꾸기", "캘린더 파일 받기", "구글 캘린더에 새로 넣기",
-        "전에 캘린더 파일로 넣은 일정은 그 자리에서 바뀝니다. 구글 캘린더 버튼은 새로 넣으니 예전 일정은 지워 주세요.");
-      show("later", false);
-    };
-
-    $("headline").textContent = "약속을 바꾸자는 요청이에요";
-    $("badge").textContent = "변경 요청";
-    show("badge", true);
-    $("yes").textContent = "좋아요, 바꿀게요";
-    $("openChange").textContent = "다른 때로 하자고 하기";
-    $("no").textContent = "그때는 어려워요";
-
-    if (cameBack) remember(agreeKey, "1");
-    if (remember(agreeKey) === "1") {
-      showAgreed();
-    } else {
-      show("decide", true);
-      if (isAndroid) {
-        // 앱이 있으면 앱이 열려 바로 바뀌고, 없으면 이 페이지가 동의한 상태로 다시 열린다.
-        $("yesApp").textContent = "좋아요, 바꿀게요";
-        $("yesApp").href = appLink(okRaw, base + "?ok=1#" + raw);
-        show("yesApp", true);
-        show("yes", false);
-      }
-    }
-
-    $("yes").addEventListener("click", function () {
-      remember(agreeKey, "1");
-      showAgreed();
-    });
-    $("yesApp").addEventListener("click", function () {
-      remember(agreeKey, "1");
-      // 앱으로 넘어가는 것을 막지 않도록 화면은 조금 뒤에 바꾼다.
-      setTimeout(showAgreed, 400);
-    });
-    $("tell").addEventListener("click", function () {
-      send(data.d ? "좋아요! " + data.t + " " + dayTime(data) + "로 바꿔요" : "좋아요! 그렇게 바꿔요");
-    });
-    $("no").addEventListener("click", function () {
-      send("그때는 어려워요: " + summary(data));
-    });
-  }
-
-  document.title = (kind === "move" ? "변경 요청 · " : "약속 · ") + data.t;
-  paint(data);
-  if (kind === "reply") replyView();
-  else if (kind === "move") moveView();
-  else inviteView();
+  // 동의를 모으는 동안에는 10초마다, 그리고 화면으로 돌아올 때 현황을 다시 받는다.
+  setInterval(function () {
+    if (document.visibilityState !== "visible" || closed || kind !== "move" || state() === "done") return;
+    refresh();
+  }, 10000);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") refresh();
+  });
 })();
 </script>
 </body>
